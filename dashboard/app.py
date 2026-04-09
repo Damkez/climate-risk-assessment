@@ -230,6 +230,23 @@ if not current.empty:
 # ── Risk Map ───────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">Geospatial Risk Map</div>', unsafe_allow_html=True)
 
+REGION_CENTERS = {
+    "mato_grosso": {"lat": -12.5, "lon": -56.0, "zoom": 4},
+    "rhine_meuse":  {"lat": 51.5,  "lon": 5.5,   "zoom": 5},
+    "punjab":       {"lat": 30.5,  "lon": 75.0,  "zoom": 5},
+}
+MAP_STYLES = {
+    "Light (Natural)": "carto-positron",
+    "Street Map":      "open-street-map",
+    "Dark":            "carto-darkmatter",
+}
+RISK_COLORS = {
+    "Low":       "#52b788",
+    "Moderate":  "#f9c74f",
+    "High":      "#f8961e",
+    "Very High": "#e74c3c",
+}
+
 grid = data["grid"]
 grid_filtered = grid[
     (grid["scenario"] == selected_scenario)
@@ -238,65 +255,155 @@ grid_filtered = grid[
 ].copy()
 
 if not grid_filtered.empty:
+    # ── Map controls ──────────────────────────────────────────────────
+    ctrl1, ctrl2, ctrl3 = st.columns([2, 2, 2])
+    with ctrl1:
+        map_metric = st.selectbox(
+            "Metric layer",
+            ["Composite Risk", "Flood", "Drought", "Extreme Heat", "Expected Loss"],
+        )
+    with ctrl2:
+        view_mode = st.radio("View mode", ["Heatmap", "Points"], horizontal=True)
+    with ctrl3:
+        map_style_label = st.selectbox("Map style", list(MAP_STYLES.keys()))
+
+    ctrl4, ctrl5 = st.columns([2, 2])
+    with ctrl4:
+        risk_threshold = st.slider(
+            "Min composite risk threshold",
+            min_value=0.0, max_value=1.0, value=0.0, step=0.05,
+            help="Hide grid cells below this composite risk level",
+        )
+    with ctrl5:
+        if view_mode == "Heatmap":
+            heat_radius = st.slider("Heatmap blur radius", min_value=5, max_value=40, value=18, step=1)
+        else:
+            point_size = st.slider("Point size", min_value=4, max_value=20, value=8, step=1)
+
+    metric_map = {
+        "Composite Risk": "composite_prob",
+        "Flood":          "flood_prob",
+        "Drought":        "drought_prob",
+        "Extreme Heat":   "heat_prob",
+        "Expected Loss":  "loss_ratio",
+    }
+    color_col = metric_map[map_metric]
+    mapbox_style = MAP_STYLES[map_style_label]
+
+    # Apply threshold filter
+    grid_filtered = grid_filtered[grid_filtered["composite_prob"] >= risk_threshold].copy()
+
+    # Auto-zoom when a single region is selected
+    if len(selected_regions) == 1:
+        region_center = REGION_CENTERS.get(selected_regions[0], {"lat": 20, "lon": 20, "zoom": 3})
+        map_center = {"lat": region_center["lat"], "lon": region_center["lon"]}
+        map_zoom = region_center["zoom"]
+    else:
+        map_center = {"lat": 20, "lon": 20}
+        map_zoom = 2
+
+    # Subsample for performance
+    if len(grid_filtered) > 4000:
+        grid_sample = grid_filtered.sample(4000, random_state=42)
+    else:
+        grid_sample = grid_filtered.copy()
+
+    range_max = 1.0 if color_col != "loss_ratio" else float(grid_sample["loss_ratio"].quantile(0.95))
+
     map_col1, map_col2 = st.columns([3, 1])
 
     with map_col1:
-        map_metric = st.radio(
-            "Map layer",
-            ["Composite Risk", "Flood", "Drought", "Extreme Heat", "Expected Loss"],
-            horizontal=True,
-        )
-
-        metric_map = {
-            "Composite Risk": "composite_prob",
-            "Flood": "flood_prob",
-            "Drought": "drought_prob",
-            "Extreme Heat": "heat_prob",
-            "Expected Loss": "loss_ratio",
-        }
-        color_col = metric_map[map_metric]
-
-        # Subsample for performance
-        if len(grid_filtered) > 3000:
-            grid_sample = grid_filtered.sample(3000, random_state=42)
+        if view_mode == "Heatmap":
+            fig_map = px.density_mapbox(
+                grid_sample,
+                lat="lat", lon="lon",
+                z=color_col,
+                radius=heat_radius,
+                color_continuous_scale="RdYlGn_r",
+                range_color=[0, range_max],
+                hover_data={
+                    "region": True,
+                    "composite_prob": ":.1%",
+                    "flood_prob": ":.1%",
+                    "drought_prob": ":.1%",
+                    "heat_prob": ":.1%",
+                    "lat": False,
+                    "lon": False,
+                },
+                mapbox_style=mapbox_style,
+                zoom=map_zoom,
+                center=map_center,
+                height=540,
+            )
         else:
-            grid_sample = grid_filtered
+            # Points mode — colour by risk_category for categorical clarity
+            grid_sample["Risk Category"] = grid_sample["risk_category"]
+            grid_sample["Flood %"] = (grid_sample["flood_prob"] * 100).round(1)
+            grid_sample["Drought %"] = (grid_sample["drought_prob"] * 100).round(1)
+            grid_sample["Heat %"] = (grid_sample["heat_prob"] * 100).round(1)
+            grid_sample["Composite %"] = (grid_sample["composite_prob"] * 100).round(1)
+            grid_sample["Prod. Value"] = grid_sample["total_production_value"].apply(fmt_usd)
+            grid_sample["Exp. Loss"] = grid_sample["total_expected_loss"].apply(fmt_usd)
 
-        range_max = 1.0 if color_col != "loss_ratio" else float(grid_sample["loss_ratio"].quantile(0.95))
+            fig_map = px.scatter_mapbox(
+                grid_sample,
+                lat="lat", lon="lon",
+                color=color_col,
+                color_continuous_scale="RdYlGn_r",
+                range_color=[0, range_max],
+                size=[point_size] * len(grid_sample),
+                size_max=point_size,
+                hover_name="region",
+                hover_data={
+                    "Risk Category": True,
+                    "Composite %": True,
+                    "Flood %": True,
+                    "Drought %": True,
+                    "Heat %": True,
+                    "Prod. Value": True,
+                    "Exp. Loss": True,
+                    "lat": False,
+                    "lon": False,
+                    color_col: False,
+                },
+                mapbox_style=mapbox_style,
+                zoom=map_zoom,
+                center=map_center,
+                height=540,
+            )
 
-        fig_map = px.density_mapbox(
-            grid_sample,
-            lat="lat", lon="lon",
-            z=color_col,
-            radius=18,
-            color_continuous_scale="RdYlGn_r",
-            range_color=[0, range_max],
-            hover_data=["region", "composite_prob", "flood_prob", "drought_prob", "heat_prob"],
-            mapbox_style="carto-positron",
-            zoom=2,
-            center={"lat": 20, "lon": 20},
-            height=500,
-        )
         fig_map.update_layout(
             margin=dict(l=0, r=0, t=0, b=0),
-            coloraxis_colorbar=dict(title=map_metric, thickness=15),
+            coloraxis_colorbar=dict(
+                title=map_metric,
+                thickness=15,
+                tickformat=".0%" if color_col != "loss_ratio" else ".1f",
+            ),
         )
         st.plotly_chart(fig_map, use_container_width=True)
+
+        if grid_filtered.empty:
+            st.info("No grid cells meet the current risk threshold. Lower the slider to see more data.")
 
     with map_col2:
         st.markdown("**Regional Summary**")
         for region_key in selected_regions:
             rg = grid_filtered[grid_filtered["region"] == region_key]
             if rg.empty:
+                st.markdown(f"*{REGION_LABELS[region_key]}* — no cells above threshold")
                 continue
             avg_risk = rg["composite_prob"].mean()
             avg_loss = rg["total_expected_loss"].sum()
+            top_cat = rg["risk_category"].value_counts().idxmax()
+            color_dot = RISK_COLORS.get(top_cat, "#999")
             st.markdown(f"""
             **{REGION_LABELS[region_key]}**
-            - Avg risk: `{avg_risk:.2%}`
+            - Avg risk: `{avg_risk:.1%}`
             - Total EAL: `{fmt_usd(avg_loss)}`
+            - Dominant: <span style='color:{color_dot}'>**{top_cat}**</span>
             - Grid cells: `{len(rg)}`
-            """)
+            """, unsafe_allow_html=True)
+            st.divider()
 
 
 # ── Scenario Comparison ───────────────────────────────────────────────
