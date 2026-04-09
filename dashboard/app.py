@@ -1056,7 +1056,7 @@ Close with a brief **Summary Assessment** (3–4 sentences) rating the overall m
 st.markdown("---")
 st.markdown(
     "<div style='text-align:center; color:#52796f; font-size:12px;'>"
-    "Climate Risk Geospatial Assessment · Kehinde Damilola Akindele · 2026"
+    "Climate Risk Geospatial Assessment · Kehinde Damilola Akindele"
     "</div>",
     unsafe_allow_html=True,
 )
