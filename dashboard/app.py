@@ -15,7 +15,7 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 import json
 import os
-import anthropic
+from openai import OpenAI
 
 # ── Page config ────────────────────────────────────────────────────────
 st.set_page_config(
@@ -843,16 +843,16 @@ with tab_tcfd:
     # ── API key ────────────────────────────────────────────────────────
     api_key = ""
     try:
-        api_key = st.secrets["ANTHROPIC_API_KEY"]
+        api_key = st.secrets["OPENAI_API_KEY"]
     except Exception:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        api_key = os.environ.get("OPENAI_API_KEY", "")
 
     if not api_key:
         api_key = st.text_input(
-            "Anthropic API Key",
+            "OpenAI API Key",
             type="password",
-            placeholder="sk-ant-...",
-            help="Enter your Anthropic API key. Get one at console.anthropic.com",
+            placeholder="sk-...",
+            help="Enter your OpenAI API key. Get one at platform.openai.com/api-keys",
         )
 
     # ── Bank selector ──────────────────────────────────────────────────
@@ -951,20 +951,20 @@ Close with a brief **Summary Assessment** (3–4 sentences) rating the overall m
 
         with st.spinner(f"Extracting TCFD disclosures for {selected_bank}…"):
             try:
-                client = anthropic.Anthropic(api_key=api_key)
-                response = client.messages.create(
-                    model="claude-opus-4-6",
+                client = OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model="gpt-4o",
                     max_tokens=4096,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                tcfd_text = response.content[0].text
+                tcfd_text = response.choices[0].message.content
                 st.session_state[f"tcfd_{selected_bank}"] = tcfd_text
 
-            except anthropic.AuthenticationError:
-                st.error("Invalid API key. Please check your Anthropic API key and try again.")
-                st.stop()
             except Exception as e:
-                st.error(f"Extraction failed: {e}")
+                if "auth" in str(e).lower() or "api key" in str(e).lower():
+                    st.error("Invalid API key. Please check your OpenAI API key and try again.")
+                else:
+                    st.error(f"Extraction failed: {e}")
                 st.stop()
 
     # ── Display results ────────────────────────────────────────────────
