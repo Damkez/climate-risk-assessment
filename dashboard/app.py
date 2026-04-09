@@ -396,11 +396,19 @@ if not grid_filtered.empty:
             avg_loss = rg["total_expected_loss"].sum()
             top_cat = rg["risk_category"].value_counts().idxmax()
             color_dot = RISK_COLORS.get(top_cat, "#999")
+            hazard_means = {
+                "Flood":   rg["flood_prob"].mean(),
+                "Drought": rg["drought_prob"].mean(),
+                "Heat":    rg["heat_prob"].mean(),
+            }
+            dom_hazard = max(hazard_means, key=hazard_means.get)
+            HAZARD_ICONS = {"Flood": "💧", "Drought": "🌵", "Heat": "🌡️"}
             st.markdown(f"""
             **{REGION_LABELS[region_key]}**
             - Avg risk: `{avg_risk:.1%}`
             - Total EAL: `{fmt_usd(avg_loss)}`
-            - Dominant: <span style='color:{color_dot}'>**{top_cat}**</span>
+            - Dominant risk: <span style='color:{color_dot}'>**{top_cat}**</span>
+            - Dominant hazard: **{HAZARD_ICONS[dom_hazard]} {dom_hazard}** (`{hazard_means[dom_hazard]:.1%}`)
             - Grid cells: `{len(rg)}`
             """, unsafe_allow_html=True)
             st.divider()
