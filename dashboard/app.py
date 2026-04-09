@@ -818,7 +818,7 @@ with tab_tcfd:
     st.markdown(
         "Select a Dutch bank to extract **TCFD-aligned climate disclosures** synthesised from "
         "publicly available sustainability reports, climate reports, and annual filings. "
-        "Powered by Claude AI."
+        "Powered by OpenAI."
     )
 
     with st.expander("ℹ️ About the TCFD Framework"):
