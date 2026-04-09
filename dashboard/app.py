@@ -31,44 +31,46 @@ st.markdown("""
     .stApp { font-family: 'DM Sans', sans-serif; }
 
     .metric-card {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        background: linear-gradient(135deg, #d8f3dc 0%, #b7e4c7 100%);
         border-radius: 12px;
         padding: 20px 24px;
-        color: white;
+        color: #1b4332;
         margin-bottom: 8px;
+        border-left: 4px solid #2d6a4f;
     }
     .metric-card .label {
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 1.5px;
-        color: #8892b0;
+        color: #52796f;
         margin-bottom: 4px;
     }
     .metric-card .value {
         font-size: 28px;
         font-weight: 700;
         margin-bottom: 2px;
+        color: #1b4332;
     }
     .metric-card .delta {
         font-size: 13px;
-        color: #ff6b6b;
+        color: #bc4749;
     }
-    .metric-card .delta.positive { color: #51cf66; }
+    .metric-card .delta.positive { color: #2d6a4f; }
 
     .section-header {
         font-size: 13px;
         text-transform: uppercase;
         letter-spacing: 2px;
-        color: #64748b;
-        border-bottom: 2px solid #e2e8f0;
+        color: #52796f;
+        border-bottom: 2px solid #95d5b2;
         padding-bottom: 8px;
         margin: 32px 0 16px 0;
     }
 
     div[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(180deg, #d8f3dc 0%, #b7e4c7 100%);
     }
-    div[data-testid="stSidebar"] .stMarkdown { color: #cbd5e1; }
+    div[data-testid="stSidebar"] .stMarkdown { color: #1b4332; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,7 +136,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("""
-    <div style='font-size:11px; color:#64748b;'>
+    <div style='font-size:11px; color:#52796f;'>
     <b>Data Sources</b><br>
     Climate: CMIP6/SSP projections<br>
     Exposure: MapSPAM, FAO statistics<br>
@@ -260,16 +262,17 @@ if not grid_filtered.empty:
         else:
             grid_sample = grid_filtered
 
-        fig_map = px.scatter_mapbox(
+        range_max = 1.0 if color_col != "loss_ratio" else float(grid_sample["loss_ratio"].quantile(0.95))
+
+        fig_map = px.density_mapbox(
             grid_sample,
             lat="lat", lon="lon",
-            color=color_col,
-            color_continuous_scale="YlOrRd",
-            range_color=[0, 1] if color_col != "loss_ratio" else [0, grid_sample["loss_ratio"].quantile(0.95)],
-            size_max=8,
-            size=[6] * len(grid_sample),
+            z=color_col,
+            radius=18,
+            color_continuous_scale="RdYlGn_r",
+            range_color=[0, range_max],
             hover_data=["region", "composite_prob", "flood_prob", "drought_prob", "heat_prob"],
-            mapbox_style="carto-darkmatter",
+            mapbox_style="carto-positron",
             zoom=2,
             center={"lat": 20, "lon": 20},
             height=500,
@@ -324,8 +327,8 @@ with sc_col1:
         title="Expected Annual Loss Trajectory",
     )
     fig_eal.update_layout(
-        template="plotly_dark",
-        plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_white",
+        plot_bgcolor="rgba(240,249,240,0.5)",
         paper_bgcolor="rgba(0,0,0,0)",
         height=400,
         yaxis_tickprefix="$",
@@ -344,8 +347,8 @@ with sc_col2:
         title="Risk Score Trajectory",
     )
     fig_risk.update_layout(
-        template="plotly_dark",
-        plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_white",
+        plot_bgcolor="rgba(240,249,240,0.5)",
         paper_bgcolor="rgba(0,0,0,0)",
         height=400,
         yaxis_range=[0, 100],
@@ -537,7 +540,7 @@ with st.expander("📋 Methodology & Data Sources"):
 
 st.markdown("---")
 st.markdown(
-    "<div style='text-align:center; color:#64748b; font-size:12px;'>"
+    "<div style='text-align:center; color:#52796f; font-size:12px;'>"
     "Climate Risk Geospatial Assessment · Kehinde Damilola Akindele · 2026"
     "</div>",
     unsafe_allow_html=True,
